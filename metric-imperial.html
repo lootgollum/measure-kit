@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0;font-family:system-ui,sans-serif}[hidden]{display:none!important}</style>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#f3c316">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>.apphome{max-width:860px;margin:0 auto 20px;font:600 14px system-ui,sans-serif}.apphome a{color:inherit;text-decoration:none;opacity:.7}.apphome a:hover{opacity:1}</style>
+<nav class="apphome"><a href="./">← All tools</a></nav>
+<title>Metric ⇄ Imperial</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a dual-scale ruler opens the page; category tabs; one converter card; then side-by-side metric / imperial readouts and rules of thumb.
+   Metric is always teal, imperial & US always rust, so the two systems read apart at a glance. */
+:root {
+  --bg: #f2f4f3;
+  --surface: #ffffff;
+  --fg: #1a1d1c;
+  --muted: #5e6763;
+  --line: #d6dcd9;
+  --tape: #f3c316;
+  --on-tape: #1a1d1c;
+  --metric: #0d7068;
+  --imperial: #a63f17;
+  --display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --body: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101413; --surface: #181d1c; --fg: #e5ebe8; --muted: #95a29c; --line: #2b3431;
+    --tape: #e2b40e; --on-tape: #141716; --metric: #5fd3c6; --imperial: #f2a072; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101413; --surface: #181d1c; --fg: #e5ebe8; --muted: #95a29c; --line: #2b3431;
+  --tape: #e2b40e; --on-tape: #141716; --metric: #5fd3c6; --imperial: #f2a072; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 400 15px/1.55 var(--body);
+  padding-block: 32px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 860px; margin: 0 auto; display: grid; gap: 28px; }
+h1 { font: 800 clamp(30px, 6vw, 48px)/1 var(--display); font-stretch: 125%; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+h1 .m { color: var(--metric); } h1 .i { color: var(--imperial); }
+h2 { font: 700 13px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 10px; }
+.lede { margin: 10px 0 0; color: var(--muted); max-width: 62ch; }
+.label { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+
+.ruler { background: var(--tape); border-radius: 4px; overflow: hidden; }
+.ruler canvas { display: block; width: 100%; height: 72px; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabs a {
+  font: 600 14px var(--body); color: var(--fg); text-decoration: none;
+  padding: 8px 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+}
+.tabs a:hover { border-color: var(--fg); }
+.tabs a[aria-current="page"] { background: var(--tape); color: var(--on-tape); border-color: var(--tape); }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 22px; display: grid; gap: 16px; }
+.conv { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 14px; align-items: end; }
+.side { display: grid; gap: 6px; min-width: 0; }
+.num {
+  width: 100%; min-width: 0; font: 600 30px/1.1 var(--mono); font-variant-numeric: tabular-nums;
+  color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px;
+}
+output.num { display: block; overflow-wrap: anywhere; }
+select {
+  width: 100%; font: 500 15px var(--body); color: var(--fg); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px;
+}
+.swap {
+  height: 48px; width: 48px; margin-bottom: 44px; border-radius: 50%; border: 1px solid var(--line);
+  background: var(--surface); color: var(--fg); font-size: 20px; cursor: pointer;
+}
+.swap:hover { background: var(--tape); color: var(--on-tape); border-color: var(--tape); }
+.formula { font: 400 14px var(--mono); color: var(--muted); margin: 0; }
+.feel { margin: 0; padding: 12px 14px; border-radius: 8px; background: var(--bg); }
+.feel:empty { display: none; }
+
+.sys-m { color: var(--metric); } .sys-i { color: var(--imperial); }
+.all { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 24px; }
+.all ul { list-style: none; margin: 0; padding: 0; }
+.all li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.all li span:last-child { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere; min-width: 0; }
+.all li.sel { font-weight: 700; }
+.all h3 { font: 700 13px var(--mono); text-transform: uppercase; letter-spacing: .08em; margin: 0 0 4px; }
+
+.tips { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.tips li { padding: 12px 14px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+td { font-family: var(--mono); }
+tr.hit td { background: var(--tape); color: var(--on-tape); }
+
+.recipe-in { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1.1fr) minmax(0,1.6fr); gap: 12px; align-items: end; }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+.tile { padding: 12px 14px; border-radius: 8px; background: var(--bg); min-width: 0; }
+.tile b { display: block; font: 600 22px var(--mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tile small { color: var(--muted); }
+.note { color: var(--muted); font-size: 14px; margin: 0; }
+.scale-in { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) minmax(0,1.6fr); gap: 12px; align-items: end; }
+.num.small { font-size: 22px; padding: 9px 12px; }
+textarea {
+  width: 100%; font: 400 14px/1.6 var(--mono); color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; resize: vertical;
+}
+.scaled { list-style: none; margin: 0; padding: 0; }
+.scaled li { display: grid; grid-template-columns: minmax(7em, auto) minmax(0, 1fr); gap: 14px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.scaled b { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.scaled small { display: block; color: var(--muted); font-size: 12px; }
+table.sizes tbody tr { cursor: pointer; }
+table.sizes tbody tr:hover td { background: var(--bg); }
+
+@media (max-width: 640px) {
+  .conv { grid-template-columns: minmax(0,1fr); }
+  .swap { margin: 0 auto; transform: rotate(90deg); }
+  .all { grid-template-columns: minmax(0,1fr); }
+  .recipe-in, .scale-in { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .scale-in .side:last-child { grid-column: 1 / -1; }
+  .recipe-in .side:last-child { grid-column: 1 / -1; }
+  .tiles { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .num { font-size: 24px; }
+}
+</style>
+
+<main>
+  <header>
+    <h1><span class="m">Metric</span> ⇄ <span class="i">Imperial</span></h1>
+    <p class="lede">Convert distances, weights, volumes, temperatures and recipe amounts between metric and imperial/US units. Each category lists every unit side by side, plus quick rules of thumb so the numbers start to make sense on their own.</p>
+  </header>
+
+  <div class="ruler" aria-label="Centimetres on the top edge, inches on the bottom edge"><canvas id="ruler"></canvas></div>
+
+  <nav class="tabs" id="tabs" aria-label="Categories"></nav>
+
+  <div id="unitView">
+    <section class="card">
+      <div class="conv">
+        <div class="side">
+          <label class="label" for="val">From</label>
+          <input class="num" id="val" type="number" step="any" inputmode="decimal">
+          <select id="from" aria-label="From unit"></select>
+        </div>
+        <button class="swap" id="swap" type="button" title="Swap units" aria-label="Swap units">⇄</button>
+        <div class="side">
+          <span class="label">To</span>
+          <output class="num" id="out" for="val from to"></output>
+          <select id="to" aria-label="To unit"></select>
+        </div>
+      </div>
+      <p class="formula" id="formula"></p>
+      <p class="feel" id="feel"></p>
+    </section>
+
+    <section style="margin-top:28px">
+      <h2>The same amount in every unit</h2>
+      <div class="all">
+        <div><h3 class="sys-m">Metric</h3><ul id="allM"></ul></div>
+        <div><h3 class="sys-i">Imperial &amp; US</h3><ul id="allI"></ul></div>
+      </div>
+    </section>
+
+    <section style="margin-top:28px">
+      <h2>Rules of thumb</h2>
+      <ul class="tips" id="tips"></ul>
+    </section>
+
+    <section id="ovenWrap" style="margin-top:28px" hidden>
+      <h2>Oven temperatures</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Gas mark</th><th>°C (conventional)</th><th>°C (fan)</th><th>°F</th><th>Description</th></tr></thead>
+          <tbody id="oven"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div id="recipeView" hidden>
+    <section class="card">
+      <div class="recipe-in">
+        <div class="side"><label class="label" for="rAmt">Amount</label><input class="num" id="rAmt" type="number" step="any" min="0" inputmode="decimal" value="2"></div>
+        <div class="side"><label class="label" for="rUnit">Unit</label><select id="rUnit"></select></div>
+        <div class="side"><label class="label" for="rIng">Ingredient</label><select id="rIng"></select></div>
+      </div>
+      <div class="tiles" id="rOut"></div>
+      <p class="note" id="rNote"></p>
+    </section>
+
+    <section style="margin-top:28px">
+      <h2>Scale and convert a whole recipe</h2>
+      <div class="card">
+        <div class="scale-in">
+          <div class="side"><label class="label" for="sFrom">Recipe serves</label><input class="num small" id="sFrom" type="number" min="0.1" step="any" inputmode="decimal" value="4"></div>
+          <div class="side"><label class="label" for="sTo">You want</label><input class="num small" id="sTo" type="number" min="0.1" step="any" inputmode="decimal" value="6"></div>
+          <div class="side"><label class="label" for="sMode">Show amounts in</label>
+            <select id="sMode"><option value="orig">Recipe's own units</option><option value="metric">Metric (g, ml)</option><option value="us">US (cups, oz)</option></select>
+          </div>
+        </div>
+        <div class="side">
+          <label class="label" for="sText">Ingredients, one per line</label>
+          <textarea id="sText" rows="8" spellcheck="false">2 cups all-purpose flour
+1 1/2 tsp baking powder
+3 tbsp sugar
+1/2 tsp salt
+1 1/4 cups milk
+2 eggs
+3 tbsp butter, melted</textarea>
+          <p class="note" id="sExample">The list above is an example. Paste your own recipe over it.</p>
+        </div>
+        <ul class="scaled" id="sOut"></ul>
+        <p class="note">Cup-to-gram conversions use typical weights for recognised ingredients (flour, sugar, butter, milk and others). Anything unrecognised is converted by volume.</p>
+      </div>
+    </section>
+
+    <section style="margin-top:28px">
+      <h2>Good to know when following recipes</h2>
+      <ul class="tips">
+        <li>A US cup is 237 ml. Australian, NZ and Canadian recipes often use a 250 ml metric cup. Old UK recipes use ounces by weight.</li>
+        <li>A US tablespoon is 14.8 ml, a metric one 15 ml, and an Australian one 20 ml. For most recipes the difference doesn't matter.</li>
+        <li>"Ounce" can mean weight (28 g) or fluid volume (30 ml). Check whether the recipe says fl oz.</li>
+        <li>Flour weight per cup varies by up to 15% depending on how you scoop it. Weighing in grams is the most reliable.</li>
+        <li>A US stick of butter is ½ cup, 8 tbsp or 113 g.</li>
+        <li>Fan ovens run hotter. Lower a conventional temperature by about 20 °C (25 °F).</li>
+      </ul>
+    </section>
+  </div>
+
+  <div id="sizesView" hidden>
+    <p class="note" style="margin:0 0 20px">Sizes vary between brands, so treat these as a starting point and check the brand's own chart when you can. Tap a row to highlight it.</p>
+    <section>
+      <h2>Men's shoes</h2>
+      <div class="table-wrap"><table class="sizes"><thead><tr><th>US</th><th>UK</th><th>EU</th><th>Foot length</th></tr></thead><tbody>
+        <tr><td>7</td><td>6</td><td>40</td><td>25 cm · 9.8 in</td></tr>
+        <tr><td>7.5</td><td>6.5</td><td>40.5</td><td>25.5 cm · 10 in</td></tr>
+        <tr><td>8</td><td>7</td><td>41</td><td>26 cm · 10.2 in</td></tr>
+        <tr><td>8.5</td><td>7.5</td><td>42</td><td>26.5 cm · 10.4 in</td></tr>
+        <tr><td>9</td><td>8</td><td>42.5</td><td>27 cm · 10.6 in</td></tr>
+        <tr><td>9.5</td><td>8.5</td><td>43</td><td>27.5 cm · 10.8 in</td></tr>
+        <tr><td>10</td><td>9</td><td>44</td><td>28 cm · 11 in</td></tr>
+        <tr><td>10.5</td><td>9.5</td><td>44.5</td><td>28.5 cm · 11.2 in</td></tr>
+        <tr><td>11</td><td>10</td><td>45</td><td>29 cm · 11.4 in</td></tr>
+        <tr><td>11.5</td><td>10.5</td><td>45.5</td><td>29.5 cm · 11.6 in</td></tr>
+        <tr><td>12</td><td>11</td><td>46</td><td>30 cm · 11.8 in</td></tr>
+        <tr><td>13</td><td>12</td><td>47.5</td><td>31 cm · 12.2 in</td></tr>
+      </tbody></table></div>
+    </section>
+    <section style="margin-top:28px">
+      <h2>Women's shoes</h2>
+      <div class="table-wrap"><table class="sizes"><thead><tr><th>US</th><th>UK</th><th>EU</th><th>Foot length</th></tr></thead><tbody>
+        <tr><td>5</td><td>3</td><td>35.5</td><td>22 cm · 8.7 in</td></tr>
+        <tr><td>5.5</td><td>3.5</td><td>36</td><td>22.5 cm · 8.9 in</td></tr>
+        <tr><td>6</td><td>4</td><td>36.5</td><td>23 cm · 9.1 in</td></tr>
+        <tr><td>6.5</td><td>4.5</td><td>37</td><td>23.5 cm · 9.3 in</td></tr>
+        <tr><td>7</td><td>5</td><td>37.5</td><td>24 cm · 9.4 in</td></tr>
+        <tr><td>7.5</td><td>5.5</td><td>38</td><td>24.5 cm · 9.6 in</td></tr>
+        <tr><td>8</td><td>6</td><td>38.5</td><td>25 cm · 9.8 in</td></tr>
+        <tr><td>8.5</td><td>6.5</td><td>39</td><td>25.5 cm · 10 in</td></tr>
+        <tr><td>9</td><td>7</td><td>40</td><td>26 cm · 10.2 in</td></tr>
+        <tr><td>9.5</td><td>7.5</td><td>40.5</td><td>26.5 cm · 10.4 in</td></tr>
+        <tr><td>10</td><td>8</td><td>41</td><td>27 cm · 10.6 in</td></tr>
+        <tr><td>11</td><td>9</td><td>42</td><td>28 cm · 11 in</td></tr>
+      </tbody></table></div>
+    </section>
+    <section style="margin-top:28px">
+      <h2>Women's clothing</h2>
+      <div class="table-wrap"><table class="sizes"><thead><tr><th>Letter</th><th>US</th><th>UK / AU</th><th>EU (DE, NL, PL…)</th><th>FR / ES</th><th>IT</th></tr></thead><tbody>
+        <tr><td>XXS</td><td>0</td><td>4</td><td>32</td><td>34</td><td>38</td></tr>
+        <tr><td>XS</td><td>2</td><td>6</td><td>34</td><td>36</td><td>40</td></tr>
+        <tr><td>S</td><td>4</td><td>8</td><td>36</td><td>38</td><td>42</td></tr>
+        <tr><td>M</td><td>6–8</td><td>10–12</td><td>38–40</td><td>40–42</td><td>44–46</td></tr>
+        <tr><td>L</td><td>10–12</td><td>14–16</td><td>42–44</td><td>44–46</td><td>48–50</td></tr>
+        <tr><td>XL</td><td>14–16</td><td>18–20</td><td>46–48</td><td>48–50</td><td>52–54</td></tr>
+      </tbody></table></div>
+    </section>
+    <section style="margin-top:28px">
+      <h2>Men's tops and suits</h2>
+      <div class="table-wrap"><table class="sizes"><thead><tr><th>Letter</th><th>Chest</th><th>Suit US / UK</th><th>Suit EU</th><th>Shirt collar</th></tr></thead><tbody>
+        <tr><td>S</td><td>91–97 cm · 36–38 in</td><td>36–38</td><td>46–48</td><td>37–38 cm · 14.5–15 in</td></tr>
+        <tr><td>M</td><td>99–104 cm · 39–41 in</td><td>40</td><td>50</td><td>39–40 cm · 15.5–16 in</td></tr>
+        <tr><td>L</td><td>107–112 cm · 42–44 in</td><td>42–44</td><td>52–54</td><td>41–42 cm · 16–16.5 in</td></tr>
+        <tr><td>XL</td><td>114–119 cm · 45–47 in</td><td>46</td><td>56</td><td>43–44 cm · 17–17.5 in</td></tr>
+        <tr><td>XXL</td><td>122–127 cm · 48–50 in</td><td>48–50</td><td>58–60</td><td>45–46 cm · 18–18.5 in</td></tr>
+      </tbody></table></div>
+    </section>
+    <section style="margin-top:28px">
+      <h2>Trousers and jeans</h2>
+      <p class="note" style="margin:0">Jeans are often sized as waist × leg length in inches, such as 32×32. To convert, multiply inches by 2.54: a 32 in waist is 81 cm, and a 34 in leg is 86 cm. The Distance &amp; length tab converts any other value.</p>
+    </section>
+  </div>
+</main>
+
+<script>
+const U = (id, name, sym, f, sys) => ({ id, name, sym, sys, to: v => v * f, from: v => v / f });
+
+const CATS = {
+  length: {
+    label: "Distance & length", def: [5, "km", "mi"],
+    units: [
+      U("mm", "Millimetres", "mm", 0.001, "m"), U("cm", "Centimetres", "cm", 0.01, "m"),
+      U("m", "Metres", "m", 1, "m"), U("km", "Kilometres", "km", 1000, "m"),
+      U("in", "Inches", "in", 0.0254, "i"), U("ft", "Feet", "ft", 0.3048, "i"),
+      U("yd", "Yards", "yd", 0.9144, "i"), U("mi", "Miles", "mi", 1609.344, "i"),
+      U("nmi", "Nautical miles", "nmi", 1852, "i"),
+    ],
+    tips: ["1 inch = 2.54 cm exactly. Your thumb's top joint is roughly an inch.",
+      "1 foot ≈ 30 cm, about the length of a standard ruler.",
+      "1 yard ≈ 0.91 m, a little shorter than a metre.",
+      "1 mile ≈ 1.6 km. A 5 km run is 3.1 miles.",
+      "Quick math: miles × 8 ÷ 5 ≈ km, and km × 5 ÷ 8 ≈ miles."],
+  },
+  weight: {
+    label: "Weight", def: [1, "kg", "lb"],
+    units: [
+      U("mg", "Milligrams", "mg", 0.001, "m"), U("g", "Grams", "g", 1, "m"),
+      U("kg", "Kilograms", "kg", 1000, "m"), U("t", "Tonnes (metric)", "t", 1e6, "m"),
+      U("oz", "Ounces", "oz", 28.349523125, "i"), U("lb", "Pounds", "lb", 453.59237, "i"),
+      U("st", "Stone (UK)", "st", 6350.29318, "i"), U("ton", "Short tons (US)", "US ton", 907184.74, "i"),
+    ],
+    tips: ["1 kg ≈ 2.2 lb. A litre bottle of water weighs about 1 kg.",
+      "1 lb ≈ 454 g, just under half a kilo.",
+      "1 oz ≈ 28 g, about the weight of a slice of bread.",
+      "1 stone = 14 lb ≈ 6.35 kg. The UK uses it for body weight.",
+      "Quick math: kg × 2, then add 10%, gives lb (70 kg → 140 + 14 = 154 lb)."],
+  },
+  volume: {
+    label: "Volume", def: [1, "cup", "ml"],
+    units: [
+      U("ml", "Millilitres", "ml", 1, "m"), U("l", "Litres", "L", 1000, "m"),
+      U("mtsp", "Teaspoons (metric)", "tsp", 5, "m"), U("mtbsp", "Tablespoons (metric)", "tbsp", 15, "m"),
+      U("mcup", "Cups (metric)", "cup", 250, "m"),
+      U("tsp", "Teaspoons (US)", "tsp", 4.92892159375, "i"), U("tbsp", "Tablespoons (US)", "tbsp", 14.78676478125, "i"),
+      U("floz", "Fluid ounces (US)", "fl oz", 29.5735295625, "i"), U("cup", "Cups (US)", "cup", 236.5882365, "i"),
+      U("pt", "Pints (US)", "pt", 473.176473, "i"), U("qt", "Quarts (US)", "qt", 946.352946, "i"),
+      U("gal", "Gallons (US)", "gal", 3785.411784, "i"),
+      U("ukfloz", "Fluid ounces (UK)", "UK fl oz", 28.4130625, "i"), U("ukpt", "Pints (UK)", "UK pt", 568.26125, "i"),
+      U("ukgal", "Gallons (UK)", "UK gal", 4546.09, "i"),
+    ],
+    tips: ["A US cup is 237 ml; a metric cup is 250 ml.",
+      "A US pint is 473 ml, but a UK pint (in a pub) is 568 ml.",
+      "A US gallon is 3.79 L; a UK gallon is 4.55 L.",
+      "1 tablespoon = 3 teaspoons ≈ 15 ml.",
+      "1 litre ≈ 1.06 US quarts, just over 4 US cups."],
+  },
+  temperature: {
+    label: "Temperature", def: [180, "c", "f"],
+    units: [
+      { id: "c", name: "Celsius", sym: "°C", sys: "m", to: v => v, from: v => v },
+      { id: "k", name: "Kelvin", sym: "K", sys: "m", to: v => v - 273.15, from: v => v + 273.15 },
+      { id: "f", name: "Fahrenheit", sym: "°F", sys: "i", to: v => (v - 32) * 5 / 9, from: v => v * 9 / 5 + 32 },
+    ],
+    tips: ["Quick math: °C × 2 + 30 ≈ °F. Good enough for weather.",
+      "0 °C = 32 °F, where water freezes.",
+      "20 °C = 68 °F, a comfortable room.",
+      "37 °C = 98.6 °F, normal body temperature.",
+      "−40 is the same in both scales."],
+  },
+  speed: {
+    label: "Speed", def: [100, "kmh", "mph"],
+    units: [
+      U("kmh", "Kilometres per hour", "km/h", 1 / 3.6, "m"), U("ms", "Metres per second", "m/s", 1, "m"),
+      U("mph", "Miles per hour", "mph", 0.44704, "i"), U("fts", "Feet per second", "ft/s", 0.3048, "i"),
+      U("kn", "Knots", "kn", 1852 / 3600, "i"),
+    ],
+    tips: ["100 km/h ≈ 62 mph, a typical motorway speed.",
+      "30 mph ≈ 50 km/h, a typical town limit.",
+      "Quick math: mph × 1.6 ≈ km/h.",
+      "1 knot = 1 nautical mile per hour ≈ 1.85 km/h. Used at sea and in the air."],
+  },
+  area: {
+    label: "Area", def: [1, "ha", "acre"],
+    units: [
+      U("cm2", "Square centimetres", "cm²", 1e-4, "m"), U("m2", "Square metres", "m²", 1, "m"),
+      U("ha", "Hectares", "ha", 1e4, "m"), U("km2", "Square kilometres", "km²", 1e6, "m"),
+      U("in2", "Square inches", "in²", 0.00064516, "i"), U("ft2", "Square feet", "ft²", 0.09290304, "i"),
+      U("yd2", "Square yards", "yd²", 0.83612736, "i"), U("acre", "Acres", "acre", 4046.8564224, "i"),
+      U("mi2", "Square miles", "mi²", 2589988.110336, "i"),
+    ],
+    tips: ["1 m² ≈ 10.8 ft². A 1,000 ft² flat is about 93 m².",
+      "1 hectare is a 100 m × 100 m square, about 2.47 acres.",
+      "1 acre ≈ 4,047 m², roughly 0.4 ha.",
+      "A football pitch is about 0.7 ha, or 1.8 acres."],
+  },
+  fuel: {
+    label: "Fuel economy", def: [6.5, "l100", "mpgus"], reciprocal: true,
+    units: [
+      { id: "l100", name: "Litres per 100 km", sym: "L/100 km", sys: "m", to: v => 100 / v, from: v => 100 / v },
+      U("kml", "Kilometres per litre", "km/L", 1, "m"),
+      U("mpgus", "Miles per gallon (US)", "mpg US", 1.609344 / 3.785411784, "i"),
+      U("mpguk", "Miles per gallon (UK)", "mpg UK", 1.609344 / 4.54609, "i"),
+    ],
+    tips: ["L/100 km is fuel used, so lower is better. mpg is distance covered, so higher is better.",
+      "Quick math: 235 ÷ US mpg ≈ L/100 km, and 282 ÷ UK mpg ≈ L/100 km.",
+      "UK mpg is about 20% higher than US mpg for the same car, because the UK gallon is bigger.",
+      "A typical family car uses 5–8 L/100 km (30–47 US mpg, 35–56 UK mpg)."],
+  },
+  recipes: { label: "Recipes" },
+  sizes: { label: "Clothing & shoes" },
+};
+
+const OVEN = [[1, 140, 120, 275, "Very low"], [2, 150, 130, 300, "Low"], [3, 170, 150, 325, "Moderately low"],
+  [4, 180, 160, 350, "Moderate"], [5, 190, 170, 375, "Moderately hot"], [6, 200, 180, 400, "Hot"],
+  [7, 220, 200, 425, "Hot"], [8, 230, 210, 450, "Very hot"], [9, 240, 220, 475, "Very hot"]];
+
+// grams per US cup (236.6 ml)
+const INGREDIENTS = [
+  ["Water", 237], ["Milk", 245], ["Heavy cream", 238], ["Yogurt", 245],
+  ["All-purpose flour", 125], ["Bread flour", 130], ["Whole wheat flour", 120],
+  ["Granulated sugar", 200], ["Brown sugar (packed)", 213], ["Powdered sugar", 120],
+  ["Butter", 227], ["Vegetable oil", 218], ["Honey", 340], ["Maple syrup", 315],
+  ["Rolled oats", 90], ["White rice (uncooked)", 185], ["Cocoa powder", 85],
+  ["Chocolate chips", 170], ["Chopped nuts", 120], ["Grated parmesan", 100], ["Table salt", 288],
+];
+const RUNITS = [
+  ["cup", "Cups (US)", 236.5882365, "v"], ["tbsp", "Tablespoons (US)", 14.78676478125, "v"],
+  ["tsp", "Teaspoons (US)", 4.92892159375, "v"], ["floz", "Fluid ounces (US)", 29.5735295625, "v"],
+  ["mcup", "Cups (metric, 250 ml)", 250, "v"], ["ml", "Millilitres", 1, "v"], ["l", "Litres", 1000, "v"],
+  ["g", "Grams", 1, "w"], ["kg", "Kilograms", 1000, "w"], ["oz", "Ounces (weight)", 28.349523125, "w"],
+  ["lb", "Pounds", 453.59237, "w"], ["stick", "Sticks of butter (US)", 113.4, "w"],
+];
+
+const $ = id => document.getElementById(id);
+const fmt = n => {
+  if (!isFinite(n)) return "—";
+  const a = Math.abs(n);
+  if (a === 0) return "0";
+  const o = a >= 1000 ? { maximumFractionDigits: 1 } : a >= 1 ? { maximumFractionDigits: 3 } : { maximumSignificantDigits: 4 };
+  return n.toLocaleString(undefined, o);
+};
+// nearest kitchen fraction, e.g. 1.32 → "1 ⅓"
+const FR = [[0, ""], [1/8, "⅛"], [1/4, "¼"], [1/3, "⅓"], [3/8, "⅜"], [1/2, "½"], [5/8, "⅝"], [2/3, "⅔"], [3/4, "¾"], [7/8, "⅞"], [1, ""]];
+const frac = x => {
+  let w = Math.floor(x), r = x - w, best = FR[0];
+  FR.forEach(f => { if (Math.abs(f[0] - r) < Math.abs(best[0] - r)) best = f; });
+  if (best[0] === 1) w += 1;
+  const s = (w ? w + (best[1] ? " " : "") : "") + best[1];
+  return s || "0";
+};
+
+const state = {};
+Object.entries(CATS).forEach(([k, c]) => { if (c.def) state[k] = { v: c.def[0], from: c.def[1], to: c.def[2] }; });
+try {
+  const saved = JSON.parse(localStorage.getItem("mi-state") || "{}");
+  Object.keys(state).forEach(k => {
+    const s = saved[k];
+    if (s && CATS[k].units.some(u => u.id === s.from) && CATS[k].units.some(u => u.id === s.to)) state[k] = s;
+  });
+} catch {}
+let cat = "length";
+
+$("tabs").innerHTML = Object.entries(CATS).map(([k, c]) => `<a href="#${k}" data-k="${k}">${c.label}</a>`).join("");
+
+function unitOptions(units) {
+  const grp = (sys, label) => `<optgroup label="${label}">` +
+    units.filter(u => u.sys === sys).map(u => `<option value="${u.id}">${u.name} (${u.sym})</option>`).join("") + `</optgroup>`;
+  return grp("m", "Metric") + grp("i", "Imperial & US");
+}
+
+function show(k) {
+  if (!CATS[k]) k = "length";
+  cat = k;
+  document.querySelectorAll("#tabs a").forEach(a => a.dataset.k === k ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
+  try { localStorage.setItem("mi-tab", k); } catch {}
+  $("unitView").hidden = k === "recipes" || k === "sizes";
+  $("recipeView").hidden = k !== "recipes";
+  $("sizesView").hidden = k !== "sizes";
+  if (k === "recipes") { recipeUpdate(); scaleUpdate(); return; }
+  if (k === "sizes") return;
+  const c = CATS[k], s = state[k];
+  $("from").innerHTML = $("to").innerHTML = unitOptions(c.units);
+  $("from").value = s.from; $("to").value = s.to; $("val").value = s.v;
+  $("tips").innerHTML = c.tips.map(t => `<li>${t}</li>`).join("");
+  $("ovenWrap").hidden = k !== "temperature";
+  update();
+}
+
+const unit = id => CATS[cat].units.find(u => u.id === id);
+
+function feel(base) {
+  if (cat === "length") {
+    const m = Math.abs(base);
+    if (m < 3 && m > 0) {
+      const inch = m / 0.0254, ft = Math.floor(inch / 12), rest = Math.round((inch - ft * 12) * 2) / 2;
+      return `As a height: <b>${ft} ft ${rest} in</b>.`;
+    }
+    if (m >= 200) {
+      const walk = m / 1000 / 5 * 60, drive = m / 1000 / 100 * 60;
+      const t = mins => mins < 90 ? `${Math.round(mins)} min` : `${(mins / 60).toFixed(1)} h`;
+      return `About <b>${t(walk)}</b> on foot at a normal pace (5 km/h, 3 mph), or <b>${t(drive)}</b> driving at 100 km/h (62 mph).`;
+    }
+    return `About <b>${Math.round(m / 0.75)}</b> adult steps.`;
+  }
+  if (cat === "weight") {
+    const kg = base / 1000;
+    if (kg >= 20 && kg <= 300) {
+      const lb = kg / 0.45359237, st = Math.floor(lb / 14);
+      return `As body weight in the UK: <b>${st} st ${Math.round(lb - st * 14)} lb</b>.`;
+    }
+    return "";
+  }
+  if (cat === "temperature") {
+    const c = base;
+    let d = c <= -40 ? "Arctic cold" : c <= 0 ? "At or below freezing" : c < 10 ? "Cold, coat weather" : c < 18 ? "Cool, jacket weather" :
+      c < 25 ? "Comfortable room temperature" : c < 32 ? "Warm summer day" : c < 42 ? "Hot day, or body temperature range" :
+      c < 100 ? "Hot water range" : c < 130 ? "Boiling point and above" : c <= 250 ? "Oven temperature" : "Very high heat (pizza oven, grill)";
+    if (c >= 130 && c <= 250) {
+      const g = OVEN.reduce((b, r) => Math.abs(r[1] - c) < Math.abs(b[1] - c) ? r : b);
+      d += `, about <b>gas mark ${g[0]}</b> (${g[4].toLowerCase()})`;
+    }
+    return d + ".";
+  }
+  if (cat === "speed") {
+    const kmh = base * 3.6;
+    if (kmh > 0 && kmh <= 30) {
+      const p = x => `${Math.floor(x)}:${String(Math.round((x % 1) * 60)).padStart(2, "0")}`;
+      return `Running or walking pace: <b>${p(60 / kmh)} min/km</b>, or <b>${p(60 / (kmh / 1.609344))} min/mile</b>.`;
+    }
+    return kmh > 0 ? `${kmh < 60 ? "Town or city" : kmh < 140 ? "Highway / motorway" : "Faster than any road limit"} speed range.` : "";
+  }
+  if (cat === "area") {
+    const side = Math.sqrt(Math.abs(base));
+    return `The same as a square <b>${fmt(side)} m</b> (${fmt(side / 0.3048)} ft) on each side.`;
+  }
+  if (cat === "fuel") {
+    const l = 100 / base;
+    if (!(l > 0 && isFinite(l))) return "";
+    const d = l < 4 ? "Exceptionally efficient (hybrid territory)" : l < 6 ? "Very efficient" : l < 8 ? "Typical small or family car" :
+      l < 11 ? "Average for an SUV or larger car" : l < 15 ? "Thirsty: big SUV, van or pickup" : "Very thirsty";
+    return `${d}. A 500 km (311 mi) trip uses about <b>${fmt(l * 5)} L</b> (${fmt(l * 5 / 3.785411784)} US gal, ${fmt(l * 5 / 4.54609)} UK gal).`;
+  }
+  if (cat === "volume") {
+    const ml = Math.abs(base);
+    return ml > 0 && ml < 5000 ? `In kitchen measures: <b>${frac(ml / 236.5882365)} US cups</b>, or <b>${frac(ml / 14.78676478125)} tbsp</b>.` : "";
+  }
+  return "";
+}
+
+function update() {
+  const s = state[cat];
+  s.v = $("val").value; s.from = $("from").value; s.to = $("to").value;
+  try { localStorage.setItem("mi-state", JSON.stringify(state)); } catch {}
+  const v = parseFloat(s.v), f = unit(s.from), t = unit(s.to);
+  if (!isFinite(v)) { $("out").textContent = "—"; $("formula").textContent = "Enter a number to convert."; $("feel").innerHTML = ""; $("allM").innerHTML = $("allI").innerHTML = ""; return; }
+  const base = f.to(v);
+  $("out").innerHTML = `<span class="sys-${t.sys}">${fmt(t.from(base))}</span> <small>${t.sym}</small>`;
+  $("formula").textContent = CATS[cat].reciprocal
+    ? `${fmt(v)} ${f.sym} = ${fmt(t.from(base))} ${t.sym}. These units are inverses of each other, so there's no single multiplier.`
+    : cat === "temperature"
+    ? (f.id === "c" && t.id === "f" ? "°F = °C × 9/5 + 32" : f.id === "f" && t.id === "c" ? "°C = (°F − 32) × 5/9" : `${fmt(v)} ${f.sym} = ${fmt(t.from(base))} ${t.sym}`)
+    : `1 ${f.sym} = ${fmt(t.from(f.to(1)))} ${t.sym}  ·  1 ${t.sym} = ${fmt(f.from(t.to(1)))} ${f.sym}`;
+  $("feel").innerHTML = feel(base);
+  const row = u => `<li class="${u.id === s.from || u.id === s.to ? "sel" : ""}"><span>${u.name}</span><span class="sys-${u.sys}">${fmt(u.from(base))} ${u.sym}</span></li>`;
+  $("allM").innerHTML = CATS[cat].units.filter(u => u.sys === "m").map(row).join("");
+  $("allI").innerHTML = CATS[cat].units.filter(u => u.sys === "i").map(row).join("");
+  if (cat === "temperature") {
+    const c = base;
+    const near = OVEN.reduce((b, r) => Math.abs(r[1] - c) < Math.abs(b[1] - c) ? r : b);
+    $("oven").innerHTML = OVEN.map(r => `<tr class="${r === near && c >= 130 && c <= 250 ? "hit" : ""}"><td>${r[0]}</td><td>${r[1]} °C</td><td>${r[2]} °C</td><td>${r[3]} °F</td><td>${r[4]}</td></tr>`).join("");
+  }
+}
+
+$("val").addEventListener("input", update);
+$("from").addEventListener("change", update);
+$("to").addEventListener("change", update);
+$("swap").addEventListener("click", () => {
+  const s = state[cat], out = unit(s.to).from(unit(s.from).to(parseFloat(s.v)));
+  [s.from, s.to] = [s.to, s.from];
+  if (isFinite(out)) s.v = +out.toPrecision(6);
+  show(cat);
+});
+
+// recipes
+$("rUnit").innerHTML = `<optgroup label="Volume">` + RUNITS.filter(u => u[3] === "v").map(u => `<option value="${u[0]}">${u[1]}</option>`).join("") +
+  `</optgroup><optgroup label="Weight">` + RUNITS.filter(u => u[3] === "w").map(u => `<option value="${u[0]}">${u[1]}</option>`).join("") + `</optgroup>`;
+$("rIng").innerHTML = INGREDIENTS.map(([n], i) => `<option value="${i}">${n}</option>`).join("");
+$("rIng").value = "4";
+
+function recipeUpdate() {
+  const amt = parseFloat($("rAmt").value), u = RUNITS.find(r => r[0] === $("rUnit").value);
+  const [ing, gPerCup] = INGREDIENTS[+$("rIng").value];
+  const density = gPerCup / 236.5882365; // g per ml
+  if (!isFinite(amt) || amt < 0) { $("rOut").innerHTML = ""; $("rNote").textContent = "Enter an amount of zero or more."; return; }
+  const ml = u[3] === "v" ? amt * u[2] : amt * u[2] / density;
+  const g = ml * density;
+  const tiles = [
+    [fmt(g), "grams", "m"], [fmt(g / 28.349523125), "ounces (weight)", "i"], [fmt(ml), "millilitres", "m"],
+    [frac(ml / 236.5882365), "US cups", "i"], [frac(ml / 14.78676478125), "US tablespoons", "i"], [frac(ml / 4.92892159375), "US teaspoons", "i"],
+  ];
+  $("rOut").innerHTML = tiles.map(([v, l, s]) => `<div class="tile"><b class="sys-${s}">${v}</b><small>${l}</small></div>`).join("");
+  $("rNote").textContent = `Based on ${gPerCup} g of ${ing.toLowerCase()} per US cup. Cup, tablespoon and teaspoon amounts are rounded to the nearest common measure.`;
+}
+["rAmt", "rUnit", "rIng"].forEach(id => $(id).addEventListener(id === "rAmt" ? "input" : "change", recipeUpdate));
+
+// whole-recipe scaler
+const FRAC_CHARS = { "½": 1/2, "⅓": 1/3, "⅔": 2/3, "¼": 1/4, "¾": 3/4, "⅛": 1/8, "⅜": 3/8, "⅝": 5/8, "⅞": 7/8 };
+const QTY_RE = /^\s*(?:(\d+)\s+(\d+)\/(\d+)|(\d+)\/(\d+)|(\d+(?:[.,]\d+)?)\s*([½⅓⅔¼¾⅛⅜⅝⅞])?|([½⅓⅔¼¾⅛⅜⅝⅞]))\s*/;
+// [pattern, unit id, kind, size in ml or g]
+const SCALE_UNITS = [
+  [/^(fl\.?\s?oz\.?|fluid\s+ounces?)\b/i, "fl oz", "v", 29.5735295625],
+  [/^(cups?|c\.)(?=\s|$)/i, "cup", "v", 236.5882365],
+  [/^(tablespoons?|tbsps?\.?|tbs\.?|tbl\.?)(?=\s|$)/i, "tbsp", "v", 14.78676478125],
+  [/^T(?=\s|$)/, "tbsp", "v", 14.78676478125],
+  [/^(teaspoons?|tsps?\.?)(?=\s|$)/i, "tsp", "v", 4.92892159375],
+  [/^t(?=\s|$)/, "tsp", "v", 4.92892159375],
+  [/^(pints?|pts?\.?)(?=\s|$)/i, "pt", "v", 473.176473],
+  [/^(quarts?|qts?\.?)(?=\s|$)/i, "qt", "v", 946.352946],
+  [/^(millilit(er|re)s?|ml)(?=\s|$)/i, "ml", "v", 1],
+  [/^(lit(er|re)s?|l)(?=\s|$)/i, "L", "v", 1000],
+  [/^(ounces?|oz\.?)(?=\s|$)/i, "oz", "w", 28.349523125],
+  [/^(pounds?|lbs?\.?)(?=\s|$)/i, "lb", "w", 453.59237],
+  [/^(kilograms?|kgs?)(?=\s|$)/i, "kg", "w", 1000],
+  [/^(grams?|g|gr)(?=\s|$)/i, "g", "w", 1],
+  [/^(sticks?)(?=\s|$)/i, "stick", "w", 113.4],
+];
+// ingredient name → index into INGREDIENTS; checked in order, first match wins
+const ING_MATCH = [
+  [/bread flour/i, 5], [/whole ?wheat|wholemeal/i, 6], [/flour/i, 4],
+  [/brown sugar/i, 8], [/powdered|icing|confectioner/i, 9], [/sugar/i, 7],
+  [/buttermilk/i, 1], [/butter/i, 10], [/\boil\b/i, 11], [/honey/i, 12], [/maple/i, 13], [/oats/i, 14], [/\brice\b/i, 15],
+  [/cocoa/i, 16], [/chocolate chip|choc chip/i, 17], [/\bnuts\b|almond|pecan|walnut|hazelnut/i, 18], [/parmesan/i, 19],
+  [/salt/i, 20], [/cream/i, 2], [/yog(h)?urt/i, 3], [/milk/i, 1], [/water/i, 0],
+];
+const LIQUIDS = new Set([0, 1, 2, 3, 11, 12, 13]);
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+function parseLine(line) {
+  const text = line.replace(/^\s*[-•*]\s*/, "");
+  const m = text.match(QTY_RE);
+  if (!m || !m[0].trim()) return { text };
+  let q;
+  if (m[1]) q = +m[1] + m[2] / m[3];
+  else if (m[4]) q = m[4] / m[5];
+  else if (m[6]) q = parseFloat(m[6].replace(",", ".")) + (m[7] ? FRAC_CHARS[m[7]] : 0);
+  else q = FRAC_CHARS[m[8]];
+  let rest = text.slice(m[0].length), unit = null;
+  for (const u of SCALE_UNITS) {
+    const um = rest.match(u[0]);
+    if (um) { unit = u; rest = rest.slice(um[0].length).replace(/^\s*(of\s+)?/i, ""); break; }
+  }
+  return { q, unit, rest: rest.trim(), text };
+}
+
+const kitchen = (ml) => ml >= 59 ? [frac(ml / 236.5882365), "cup"] : ml >= 14 ? [frac(ml / 14.78676478125), "tbsp"] : [frac(ml / 4.92892159375), "tsp"];
+const plural = (n, u) => u === "cup" && n !== "1" && !/^[⅛¼⅓⅜½⅝⅔¾⅞]$/.test(n) ? "cups" : u === "stick" && n !== "1" ? "sticks" : u;
+
+function scaleUpdate() {
+  const f = parseFloat($("sTo").value) / parseFloat($("sFrom").value);
+  const mode = $("sMode").value;
+  try { localStorage.setItem("mi-scale", JSON.stringify({ from: $("sFrom").value, to: $("sTo").value, mode, text: $("sText").value })); } catch {}
+  if (!(f > 0 && isFinite(f))) { $("sOut").innerHTML = `<li><span></span><span>Enter both serving numbers above zero.</span></li>`; return; }
+  $("sOut").innerHTML = $("sText").value.split("\n").filter(l => l.trim()).map(line => {
+    const p = parseLine(line);
+    if (p.q === undefined) return `<li><b>–</b><span>${esc(p.text)}</span></li>`;
+    const q = p.q * f;
+    let amount;
+    if (!p.unit) {
+      amount = Number.isInteger(+q.toFixed(2)) ? String(Math.round(q)) : frac(q);
+    } else {
+      const [, uid, kind, size] = p.unit;
+      const ing = ING_MATCH.find(([re]) => re.test(p.rest));
+      const dens = ing ? INGREDIENTS[ing[1]][1] / 236.5882365 : null; // g per ml
+      const isLiquid = ing && LIQUIDS.has(ing[1]);
+      const amt = q * size; // ml or g
+      if (mode === "orig") {
+        const n = ["cup", "tbsp", "tsp", "stick"].includes(uid) ? frac(q) : fmt(q);
+        amount = `${n} ${plural(n, uid)}`;
+      } else if (mode === "metric") {
+        if (kind === "w") amount = amt >= 1000 ? `${fmt(amt / 1000)} kg` : `${Math.round(amt)} g`;
+        else if (dens && !isLiquid && amt * dens >= 3) amount = `${Math.round(amt * dens)} g`;
+        else amount = amt >= 1000 ? `${fmt(amt / 1000)} L` : `${fmt(Math.round(amt * 10) / 10)} ml`;
+      } else {
+        if (kind === "v") { const [n, u] = kitchen(amt); amount = `${n} ${plural(n, u)}`; }
+        else if (dens && !["oz", "lb"].includes(uid)) { const [n, u] = kitchen(amt / dens); amount = `${n} ${plural(n, u)}`; }
+        else { const oz = amt / 28.349523125; amount = oz >= 16 ? `${fmt(oz / 16)} lb` : `${fmt(Math.round(oz * 10) / 10)} oz`; }
+      }
+    }
+    return `<li><b>${amount}</b><span>${esc(p.rest ?? "")}<small>${esc(p.text)}</small></span></li>`;
+  }).join("");
+}
+try {
+  const s = JSON.parse(localStorage.getItem("mi-scale") || "null");
+  if (s) { $("sFrom").value = s.from; $("sTo").value = s.to; $("sMode").value = s.mode; $("sText").value = s.text; $("sExample").hidden = true; }
+} catch {}
+["sFrom", "sTo", "sText"].forEach(id => $(id).addEventListener("input", () => { $("sExample").hidden = true; scaleUpdate(); }));
+$("sMode").addEventListener("change", scaleUpdate);
+document.querySelectorAll("table.sizes tbody").forEach(tb => tb.addEventListener("click", e => {
+  const tr = e.target.closest("tr");
+  if (tr) tr.classList.toggle("hit");
+}));
+
+// ruler: centimetres along the top edge, inches along the bottom, at CSS scale (96 px = 1 in)
+function drawRuler() {
+  const cv = $("ruler"), dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = 72;
+  cv.width = w * dpr; cv.height = h * dpr;
+  const ctx = cv.getContext("2d"), cs = getComputedStyle(document.documentElement);
+  ctx.scale(dpr, dpr);
+  const ink = cs.getPropertyValue("--on-tape").trim();
+  ctx.fillStyle = ink; ctx.strokeStyle = ink; ctx.lineWidth = 1;
+  ctx.font = "600 11px 'IBM Plex Mono', monospace"; ctx.textBaseline = "top";
+  const pxCm = 96 / 2.54;
+  for (let mm = 0; mm * pxCm / 10 < w; mm++) {
+    const x = Math.round(mm * pxCm / 10) + 0.5, len = mm % 10 === 0 ? 18 : mm % 5 === 0 ? 12 : 6;
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, len); ctx.stroke();
+    if (mm % 10 === 0 && mm) ctx.fillText(mm / 10, x + 3, 16);
+  }
+  ctx.fillText("cm", 4, 16);
+  ctx.textBaseline = "bottom";
+  for (let e = 0; e * 12 < w; e++) {
+    const x = Math.round(e * 12) + 0.5, len = e % 8 === 0 ? 18 : e % 4 === 0 ? 13 : e % 2 === 0 ? 9 : 5;
+    ctx.beginPath(); ctx.moveTo(x, h); ctx.lineTo(x, h - len); ctx.stroke();
+    if (e % 8 === 0 && e) ctx.fillText(e / 8, x + 3, h - 14);
+  }
+  ctx.fillText("in", 4, h - 14);
+}
+window.addEventListener("resize", drawRuler);
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", drawRuler);
+new MutationObserver(drawRuler).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+document.fonts?.ready.then(drawRuler);
+
+window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+let startTab = location.hash.slice(1);
+if (!startTab) try { startTab = localStorage.getItem("mi-tab") || ""; } catch {}
+show(startTab);
+drawRuler();
+</script>
+
+<script>if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js");</script>
+</html>

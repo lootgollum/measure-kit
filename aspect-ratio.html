@@ -1,0 +1,576 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0;font-family:system-ui,sans-serif}[hidden]{display:none!important}</style>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#f3c316">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>.apphome{max-width:860px;margin:0 auto 20px;font:600 14px system-ui,sans-serif}.apphome a{color:inherit;text-decoration:none;opacity:.7}.apphome a:hover{opacity:1}</style>
+<nav class="apphome"><a href="./">← All tools</a></nav>
+<title>Aspect Ratio Finder</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one centered work column; inputs on top, result + live frame preview below, reference table last */
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --fg: #16202c;
+  --muted: #5d6b7c;
+  --line: #d5dce5;
+  --accent: #2357d6;
+  --accent-soft: #dfe7fb;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f141b; --surface: #171e28; --fg: #e6ebf2; --muted: #93a1b3;
+    --line: #2a3442; --accent: #7aa2ff; --accent-soft: #1d2a45; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f141b; --surface: #171e28; --fg: #e6ebf2; --muted: #93a1b3;
+  --line: #2a3442; --accent: #7aa2ff; --accent-soft: #1d2a45; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--display); font-size: 15px; line-height: 1.5;
+  padding-block: 40px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 760px; margin: 0 auto; display: grid; gap: 28px; }
+h1 { font-size: clamp(28px, 5vw, 40px); font-weight: 700; margin: 0; letter-spacing: -0.02em; text-wrap: balance; }
+.lede { margin: 6px 0 0; color: var(--muted); max-width: 60ch; }
+.label { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+
+.inputs { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 12px; align-items: end; }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field input {
+  width: 100%; font: 600 24px/1 var(--mono); color: var(--fg);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px;
+  padding: 14px 14px; font-variant-numeric: tabular-nums;
+}
+.field input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.times { font: 400 24px var(--mono); color: var(--muted); padding-bottom: 14px; }
+button {
+  font: 500 14px var(--display); color: var(--fg); background: transparent;
+  border: 1px solid var(--line); border-radius: 8px; padding: 0 14px; height: 54px; cursor: pointer;
+}
+button:hover { border-color: var(--accent); color: var(--accent); }
+
+.result { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+.ratio { font: 600 clamp(44px, 9vw, 72px)/1 var(--mono); letter-spacing: -0.03em; margin: 8px 0 4px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.chip { display: inline-block; font: 600 12px var(--mono); background: var(--accent-soft); color: var(--accent); padding: 4px 8px; border-radius: 999px; }
+dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 18px 0 0; }
+dt { color: var(--muted); }
+dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+
+.stage { display: grid; place-items: center; min-height: 200px; border: 1px dashed var(--line); border-radius: 8px; padding: 16px; }
+.frame { border: 2px solid var(--accent); background: var(--accent-soft); position: relative; transition: width .25s, height .25s; max-width: 100%; }
+.frame::before, .frame::after { content: ""; position: absolute; background: var(--accent); opacity: .35; }
+.frame::before { left: 33.33%; right: 33.33%; top: 0; bottom: 0; background: none; border-left: 1px solid var(--accent); border-right: 1px solid var(--accent); }
+.frame::after { top: 33.33%; bottom: 33.33%; left: 0; right: 0; background: none; border-top: 1px solid var(--accent); border-bottom: 1px solid var(--accent); }
+@media (prefers-reduced-motion: reduce) { .frame { transition: none; } }
+
+.scale { display: grid; gap: 10px; }
+.scale-row { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: end; }
+.scale .field input { font-size: 18px; padding: 10px 12px; }
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+th { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+td.mono { font-family: var(--mono); }
+tr.hit td { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.err { color: #c2410c; font-family: var(--mono); font-size: 13px; }
+
+h2 { font-size: 22px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+.slice { display: grid; gap: 16px; }
+.slice-grid { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr); gap: 24px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 24px; }
+.controls { display: grid; gap: 16px; align-content: start; min-width: 0; }
+.margins { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.margins .field input { font-size: 18px; padding: 10px 12px; }
+.check { display: flex; gap: 8px; align-items: center; cursor: pointer; }
+select { width: 100%; font: 500 14px var(--display); color: var(--fg); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.swatch { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.swatch input { width: 36px; height: 28px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }
+.toggles { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.slice-stats { margin: 0; }
+.dl { display: inline-flex; align-items: center; justify-content: center; height: 44px; padding: 0 16px; border-radius: 8px;
+  background: var(--accent); color: var(--surface); font-weight: 600; text-decoration: none; }
+.dl:hover { filter: brightness(1.1); }
+.hint { margin: 0; font-size: 13px; color: var(--muted); }
+.preview { display: grid; place-items: center; min-width: 0; padding: 12px; border-radius: 8px;
+  background-color: var(--bg); background-image: linear-gradient(45deg, var(--line) 25%, transparent 25%, transparent 75%, var(--line) 75%), linear-gradient(45deg, var(--line) 25%, transparent 25%, transparent 75%, var(--line) 75%);
+  background-size: 16px 16px; background-position: 0 0, 8px 8px; }
+.stack { display: grid; max-width: 100%; }
+.stack img { grid-area: 1 / 1; }
+#sImg { max-width: 100%; max-height: 520px; height: auto; box-shadow: 0 1px 4px rgba(0,0,0,.25); position: relative; }
+#sPhoto { width: 100%; height: 100%; object-fit: cover; }
+.stack.over #sImg { opacity: .5; }
+.loadrow { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: -12px; }
+.mini { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; font: 500 13px var(--display); color: var(--fg);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.mini:hover { border-color: var(--accent); color: var(--accent); }
+.copyrow { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.ok { color: var(--accent); } .warn { color: #c2410c; }
+.presets { display: grid; gap: 8px; }
+.presets .hint { max-width: 65ch; }
+.preset-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.preset { display: grid; gap: 4px; padding: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+.preset.best { border-color: var(--accent); }
+.preset b { font: 600 20px var(--mono); font-variant-numeric: tabular-nums; }
+.preset small { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+.preset .copyrow { margin-top: 6px; }
+body.dragging main { outline: 2px dashed var(--accent); outline-offset: 8px; }
+
+@media (max-width: 600px) {
+  .slice-grid { grid-template-columns: 1fr; }
+  .inputs { grid-template-columns: 1fr auto 1fr; }
+  .inputs button { grid-column: 1 / -1; height: 44px; }
+  .result { grid-template-columns: 1fr; }
+}
+</style>
+
+<main>
+  <header>
+    <h1>Aspect Ratio Finder</h1>
+    <p class="lede">Enter an image's width and height in pixels. You get the reduced ratio, the closest standard format, and a calculator for resizing without distortion.</p>
+  </header>
+
+  <section class="inputs">
+    <div class="field"><label class="label" for="w">Width (px)</label><input id="w" type="number" min="1" inputmode="numeric" value="1920"></div>
+    <span class="times">×</span>
+    <div class="field"><label class="label" for="h">Height (px)</label><input id="h" type="number" min="1" inputmode="numeric" value="1080"></div>
+    <button id="swap" type="button" title="Swap width and height">Swap ⇄</button>
+  </section>
+  <div class="loadrow">
+    <label class="mini" for="file">Load an image…</label>
+    <input id="file" type="file" accept="image/*" hidden>
+    <span class="hint" id="fileInfo">Or drop or paste an image anywhere on the page to read its size.</span>
+  </div>
+
+  <section class="result" aria-live="polite">
+    <div>
+      <div class="label">Exact ratio</div>
+      <div class="ratio" id="ratio">16:9</div>
+      <span class="chip" id="nearest">Matches 16:9</span>
+      <div class="copyrow">
+        <button class="mini" type="button" id="copyRatio">Copy ratio</button>
+        <button class="mini" type="button" id="copySize">Copy size</button>
+        <button class="mini" type="button" id="round8">Round to ×8</button>
+        <button class="mini" type="button" id="round64">Round to ×64</button>
+      </div>
+      <dl>
+        <dt>Grid fit</dt><dd id="gridFit">–</dd>
+        <dt>Decimal</dt><dd id="dec">1.778 : 1</dd>
+        <dt>Orientation</dt><dd id="orient">Landscape</dd>
+        <dt>Megapixels</dt><dd id="mp">2.07 MP</dd>
+        <dt>Common name</dt><dd id="name">HD / widescreen</dd>
+      </dl>
+      <p class="err" id="err" hidden></p>
+    </div>
+    <div class="stage"><div class="frame" id="frame"></div></div>
+  </section>
+
+  <section class="presets">
+    <div class="label">Nearest Fooocus / SDXL sizes</div>
+    <p class="hint">SDXL models like Fooocus generate best near one megapixel, at these sizes. Generate at the closest one, then upscale and crop to your target.</p>
+    <div class="preset-list" id="presets"></div>
+  </section>
+
+  <section class="scale">
+    <div class="label">Resize at the same ratio</div>
+    <div class="scale-row">
+      <div class="field"><label class="label" for="sw">New width</label><input id="sw" type="number" min="1" inputmode="numeric" placeholder="e.g. 1280"></div>
+      <span class="times">×</span>
+      <div class="field"><label class="label" for="sh">New height</label><input id="sh" type="number" min="1" inputmode="numeric" placeholder="e.g. 720"></div>
+    </div>
+  </section>
+
+  <section class="slice">
+    <div>
+      <h2>9-slice guide image</h2>
+      <p class="lede">Set the border margins and get a full-size PNG at the dimensions above, with corners, edges and center filled in solid colors. Use it as a layout or mask input in Fooocus or similar tools so the generated image keeps to the borders.</p>
+    </div>
+    <div class="slice-grid">
+      <div class="controls">
+        <div class="margins">
+          <div class="field"><label class="label" for="mt">Top</label><input id="mt" type="number" min="0" step="any" inputmode="decimal" value="96"></div>
+          <div class="field"><label class="label" for="mr">Right</label><input id="mr" type="number" min="0" step="any" inputmode="decimal" value="96"></div>
+          <div class="field"><label class="label" for="mb">Bottom</label><input id="mb" type="number" min="0" step="any" inputmode="decimal" value="96"></div>
+          <div class="field"><label class="label" for="ml">Left</label><input id="ml" type="number" min="0" step="any" inputmode="decimal" value="96"></div>
+        </div>
+        <div class="margins">
+          <div class="field">
+            <label class="label" for="munit">Margins in</label>
+            <select id="munit"><option value="px">Pixels</option><option value="pct">% of size</option></select>
+          </div>
+          <div class="field">
+            <label class="label" for="msnap">Snap margins to</label>
+            <select id="msnap"><option value="1">Any pixel</option><option value="8">Multiples of 8</option><option value="64">Multiples of 64</option></select>
+          </div>
+        </div>
+        <label class="check"><input id="mlink" type="checkbox" checked> Same margin on all sides</label>
+
+        <div class="field">
+          <label class="label" for="style">Output</label>
+          <select id="style">
+            <option value="blocks">Color blocks (layout guide)</option>
+            <option value="maskBorder">Mask: borders white, center black</option>
+            <option value="maskCenter">Mask: center white, borders black</option>
+          </select>
+        </div>
+
+        <div class="swatches" id="swatches">
+          <label class="swatch"><input id="cCorner" type="color" value="#e4572e"> Corners</label>
+          <label class="swatch"><input id="cEdgeH" type="color" value="#2e86ab"> Top / bottom</label>
+          <label class="swatch"><input id="cEdgeV" type="color" value="#3bb273"> Left / right</label>
+          <label class="swatch"><input id="cCenter" type="color" value="#808080"> Center</label>
+          <label class="swatch"><input id="cLine" type="color" value="#111111"> Lines</label>
+        </div>
+        <div class="toggles">
+          <label class="check"><input id="tLines" type="checkbox" checked> Divider lines</label>
+          <label class="check"><input id="tLabels" type="checkbox"> Size labels</label>
+        </div>
+
+        <label class="check" id="overlayRow" hidden><input id="tOverlay" type="checkbox" checked> Show over loaded image</label>
+
+        <dl class="slice-stats">
+          <dt>Margins t/r/b/l</dt><dd id="sMargins">–</dd>
+          <dt>Center area</dt><dd id="sCenter">–</dd>
+          <dt>Center ratio</dt><dd id="sCenterR">–</dd>
+          <dt>Top / bottom edge</dt><dd id="sEdgeH">–</dd>
+          <dt>Left / right edge</dt><dd id="sEdgeV">–</dd>
+        </dl>
+        <p class="err" id="sErr" hidden></p>
+        <a class="dl" id="sDl" href="#" download="9slice.png">Download PNG</a>
+        <p class="hint" id="sHint">You can also right-click the preview and choose Save image as.</p>
+      </div>
+      <div class="preview"><div class="stack"><img id="sPhoto" alt="" hidden><img id="sImg" alt="9-slice guide preview"></div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="label" style="margin-bottom:8px">Standard ratios</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Ratio</th><th>Decimal</th><th>Typical use</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+const STANDARDS = [
+  [1, 1, "Square, Instagram post"],
+  [5, 4, "Large format print, 8×10 photo"],
+  [4, 3, "Classic monitors, most phone cameras"],
+  [3, 2, "35mm film, DSLR sensors"],
+  [16, 10, "Laptop and desktop displays"],
+  [16, 9, "HD / widescreen"],
+  [1.85, 1, "Cinema flat"],
+  [2, 1, "Univisium, modern phones"],
+  [21, 9, "Ultrawide monitors"],
+  [2.39, 1, "Cinema scope"],
+  [4, 5, "Instagram portrait"],
+  [2, 3, "Portrait photo"],
+  [3, 4, "Portrait tablet / phone camera"],
+  [9, 16, "Stories, Reels, TikTok"],
+];
+const $ = id => document.getElementById(id);
+const gcd = (a, b) => b ? gcd(b, a % b) : a;
+const fmt = (a, b) => `${+a.toFixed(2)}:${+b.toFixed(2)}`;
+
+$("tbody").innerHTML = STANDARDS.map(([a, b, use], i) =>
+  `<tr data-i="${i}"><td class="mono">${fmt(a, b)}</td><td class="mono">${(a / b).toFixed(3)}</td><td>${use}</td></tr>`).join("");
+
+let lastScale = "sw";
+
+function update() {
+  const w = Math.round(+$("w").value), h = Math.round(+$("h").value);
+  const ok = w > 0 && h > 0;
+  $("err").hidden = ok;
+  if (!ok) { $("err").textContent = "Enter a width and height above zero."; return; }
+
+  const g = gcd(w, h), rw = w / g, rh = h / g, r = w / h;
+  $("ratio").textContent = `${rw}:${rh}`;
+  $("dec").textContent = r >= 1 ? `${r.toFixed(3)} : 1` : `1 : ${(h / w).toFixed(3)}`;
+  $("orient").textContent = w === h ? "Square" : w > h ? "Landscape" : "Portrait";
+  $("mp").textContent = `${(w * h / 1e6).toFixed(2)} MP`;
+  const fit = w % 64 === 0 && h % 64 === 0 ? 64 : w % 8 === 0 && h % 8 === 0 ? 8 : 0;
+  $("gridFit").innerHTML = fit ? `<span class="ok">✓ Multiple of ${fit}</span>` : `<span class="warn">Not a multiple of 8</span>`;
+
+  // nearest standard by log distance, so 2:1 vs 1:2 are treated symmetrically
+  let best = 0, bestD = Infinity;
+  STANDARDS.forEach(([a, b], i) => {
+    const d = Math.abs(Math.log(r) - Math.log(a / b));
+    if (d < bestD) { bestD = d; best = i; }
+  });
+  const [ba, bb, use] = STANDARDS[best];
+  const exact = bestD < 0.005;
+  const pct = ((Math.exp(bestD) - 1) * 100).toFixed(1);
+  $("nearest").textContent = exact ? `Matches ${fmt(ba, bb)}` : `Closest: ${fmt(ba, bb)} (${pct}% off)`;
+  $("name").textContent = exact ? use : `≈ ${use}`;
+  document.querySelectorAll("#tbody tr").forEach(tr => tr.classList.toggle("hit", +tr.dataset.i === best));
+
+  const max = 220, f = $("frame");
+  f.style.width = (r >= 1 ? max : max * r) + "px";
+  f.style.height = (r >= 1 ? max / r : max) + "px";
+
+  rescale();
+  renderPresets(w, h);
+  queueSlice();
+  save();
+}
+
+// Fooocus's built-in SDXL resolution list
+const SDXL = [[704,1408],[704,1344],[768,1344],[768,1280],[832,1216],[832,1152],[896,1152],[896,1088],[960,1088],[960,1024],
+  [1024,1024],[1024,960],[1088,960],[1088,896],[1152,896],[1152,832],[1216,832],[1280,768],[1344,768],[1344,704],
+  [1408,704],[1472,704],[1536,640],[1600,640],[1664,576],[1728,576]];
+
+function renderPresets(w, h) {
+  const r = Math.log(w / h);
+  const ranked = SDXL.map(([pw, ph]) => ({ pw, ph, d: Math.abs(Math.log(pw / ph) - r) })).sort((a, b) => a.d - b.d).slice(0, 3);
+  $("presets").innerHTML = ranked.map(({ pw, ph, d }, i) => {
+    const up = Math.max(w / pw, h / ph);
+    const off = ((Math.exp(d) - 1) * 100).toFixed(1);
+    return `<div class="preset${i === 0 ? " best" : ""}">
+      <b>${pw}×${ph}</b>
+      <small>${i === 0 ? "Closest · " : ""}${(pw / ph).toFixed(3)} · ${off === "0.0" ? "exact ratio" : off + "% off"}</small>
+      <small>${up > 1.001 ? `Upscale ×${up.toFixed(2)} to cover ${w}×${h}` : `Already covers ${w}×${h}`}</small>
+      <div class="copyrow"><button class="mini" type="button" data-copy="${pw}x${ph}">Copy</button><button class="mini" type="button" data-use="${pw}x${ph}">Use this size</button></div>
+    </div>`;
+  }).join("");
+}
+
+async function copyText(text, btn) {
+  const old = btn.textContent;
+  try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; }
+  catch { btn.textContent = text; }
+  setTimeout(() => { btn.textContent = old; }, 1400);
+}
+
+$("presets").addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.dataset.copy) copyText(b.dataset.copy, b);
+  if (b.dataset.use) { const [pw, ph] = b.dataset.use.split("x"); $("w").value = pw; $("h").value = ph; update(); }
+});
+$("copyRatio").addEventListener("click", e => copyText($("ratio").textContent, e.currentTarget));
+$("copySize").addEventListener("click", e => copyText(`${$("w").value}x${$("h").value}`, e.currentTarget));
+[["round8", 8], ["round64", 64]].forEach(([id, n]) => $(id).addEventListener("click", () => {
+  $("w").value = Math.max(n, Math.round(+$("w").value / n) * n);
+  $("h").value = Math.max(n, Math.round(+$("h").value / n) * n);
+  update();
+}));
+
+// load an image to read its size and preview the guide on top of it
+let photoUrl = null;
+function loadImage(file) {
+  if (!file || !file.type.startsWith("image/")) return;
+  const url = URL.createObjectURL(file), img = new Image();
+  img.onload = () => {
+    if (photoUrl) URL.revokeObjectURL(photoUrl);
+    photoUrl = url;
+    $("w").value = img.naturalWidth; $("h").value = img.naturalHeight;
+    $("sPhoto").src = url; $("sPhoto").hidden = false;
+    $("overlayRow").hidden = false;
+    $("fileInfo").textContent = `Loaded ${file.name || "pasted image"} (${img.naturalWidth}×${img.naturalHeight}).`;
+    applyOverlay();
+    update();
+  };
+  img.onerror = () => { URL.revokeObjectURL(url); $("fileInfo").textContent = "That file couldn't be read as an image."; };
+  img.src = url;
+}
+function applyOverlay() {
+  const on = !!photoUrl && $("tOverlay").checked;
+  $("sPhoto").hidden = !on;
+  document.querySelector(".stack").classList.toggle("over", on);
+}
+$("file").addEventListener("change", e => loadImage(e.target.files[0]));
+$("tOverlay").addEventListener("change", applyOverlay);
+document.addEventListener("paste", e => {
+  const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith("image/"));
+  if (item) loadImage(item.getAsFile());
+});
+document.addEventListener("dragover", e => { e.preventDefault(); document.body.classList.add("dragging"); });
+document.addEventListener("dragleave", e => { if (!e.relatedTarget) document.body.classList.remove("dragging"); });
+document.addEventListener("drop", e => {
+  e.preventDefault(); document.body.classList.remove("dragging");
+  loadImage(e.dataTransfer?.files?.[0]);
+});
+
+// remember inputs between visits (this browser only)
+const SAVED = ["w", "h", "mt", "mr", "mb", "ml", "munit", "msnap", "mlink", "style", "cCorner", "cEdgeH", "cEdgeV", "cCenter", "cLine", "tLines", "tLabels"];
+function save() {
+  try {
+    const o = {};
+    SAVED.forEach(id => { const el = $(id); o[id] = el.type === "checkbox" ? el.checked : el.value; });
+    localStorage.setItem("arf", JSON.stringify(o));
+  } catch {}
+}
+function restore() {
+  try {
+    const o = JSON.parse(localStorage.getItem("arf") || "{}");
+    SAVED.forEach(id => { if (id in o) { const el = $(id); el.type === "checkbox" ? (el.checked = o[id]) : (el.value = o[id]); } });
+  } catch {}
+}
+
+// 9-slice guide
+const sCanvas = document.createElement("canvas");
+let sUrl = null, sBlob = null, sPending = false, downloads = null;
+// on claude.ai, saving goes through the viewer's downloads prompt; opened locally, the plain link downloads
+window.claude?.use?.("downloads").then(d => { downloads = d; }).catch(() => {});
+const MAX_SIDE = 8192;
+
+function queueSlice() {
+  if (sPending) return;
+  sPending = true;
+  requestAnimationFrame(() => { sPending = false; drawSlice(); });
+}
+
+function textColorFor(hex) {
+  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  return (0.299 * r + 0.587 * g + 0.114 * b) > 150 ? "#000000" : "#ffffff";
+}
+
+function drawSlice() {
+  const W = Math.round(+$("w").value), H = Math.round(+$("h").value);
+  const pct = $("munit").value === "pct", snap = +$("msnap").value;
+  const [t, r, b, l] = ["mt", "mr", "mb", "ml"].map(id => {
+    let v = Math.max(0, +$(id).value || 0);
+    if (pct) v = v / 100 * (id === "mt" || id === "mb" ? H : W);
+    return Math.round(v / snap) * snap;
+  });
+  const err = msg => { $("sErr").textContent = msg; $("sErr").hidden = false; $("sDl").hidden = true; };
+  $("sErr").hidden = true; $("sDl").hidden = false;
+  if (!(W > 0 && H > 0)) return err("Enter a width and height above zero first.");
+  if (W > MAX_SIDE || H > MAX_SIDE) return err(`Guide images are limited to ${MAX_SIDE} px per side.`);
+  if (l + r >= W) return err(`Left + right margins (${l + r} px) must be less than the width (${W} px).`);
+  if (t + b >= H) return err(`Top + bottom margins (${t + b} px) must be less than the height (${H} px).`);
+
+  const cw = W - l - r, ch = H - t - b, style = $("style").value;
+  const col = style === "blocks"
+    ? { corner: $("cCorner").value, h: $("cEdgeH").value, v: $("cEdgeV").value, center: $("cCenter").value }
+    : style === "maskBorder"
+      ? { corner: "#ffffff", h: "#ffffff", v: "#ffffff", center: "#000000" }
+      : { corner: "#000000", h: "#000000", v: "#000000", center: "#ffffff" };
+
+  sCanvas.width = W; sCanvas.height = H;
+  const ctx = sCanvas.getContext("2d");
+  const regions = [
+    [0, 0, l, t, col.corner, "corner"], [W - r, 0, r, t, col.corner, "corner"],
+    [0, H - b, l, b, col.corner, "corner"], [W - r, H - b, r, b, col.corner, "corner"],
+    [l, 0, cw, t, col.h, "top"], [l, H - b, cw, b, col.h, "bottom"],
+    [0, t, l, ch, col.v, "left"], [W - r, t, r, ch, col.v, "right"],
+    [l, t, cw, ch, col.center, "center"],
+  ];
+  regions.forEach(([x, y, w, h, c]) => { if (w > 0 && h > 0) { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); } });
+
+  if (style === "blocks" && $("tLines").checked) {
+    const lw = Math.max(1, Math.round(Math.min(W, H) / 400));
+    ctx.fillStyle = $("cLine").value;
+    [l, W - r].forEach(x => { if (x > 0 && x < W) ctx.fillRect(x - lw / 2, 0, lw, H); });
+    [t, H - b].forEach(y => { if (y > 0 && y < H) ctx.fillRect(0, y - lw / 2, W, lw); });
+  }
+
+  if (style === "blocks" && $("tLabels").checked) {
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    regions.forEach(([x, y, w, h, c, name]) => {
+      if (w <= 0 || h <= 0) return;
+      const label = `${name} ${w}×${h}`;
+      let size = Math.min(h * 0.4, Math.min(W, H) / 18);
+      ctx.font = `600 ${size}px system-ui, sans-serif`;
+      const tw = ctx.measureText(label).width;
+      if (tw > w * 0.9) { size *= (w * 0.9) / tw; ctx.font = `600 ${size}px system-ui, sans-serif`; }
+      if (size < 8) return;
+      ctx.fillStyle = textColorFor(c);
+      ctx.fillText(label, x + w / 2, y + h / 2);
+    });
+  }
+
+  const g = gcd(cw, ch);
+  $("sMargins").textContent = `${t} / ${r} / ${b} / ${l} px`;
+  $("sCenter").textContent = `${cw} × ${ch} px`;
+  save();
+  $("sCenterR").textContent = `${cw / g}:${ch / g} (${(cw / ch).toFixed(3)})`;
+  $("sEdgeH").textContent = `${cw} × ${t} / ${cw} × ${b} px`;
+  $("sEdgeV").textContent = `${l} × ${ch} / ${r} × ${ch} px`;
+
+  sCanvas.toBlob(blob => {
+    if (!blob) return err("The browser could not create this image. Try smaller dimensions.");
+    if (sUrl) URL.revokeObjectURL(sUrl);
+    sBlob = blob;
+    sUrl = URL.createObjectURL(blob);
+    $("sImg").src = sUrl;
+    $("sDl").href = sUrl;
+    $("sDl").download = `9slice_${W}x${H}_t${t}-r${r}-b${b}-l${l}_${style}.png`;
+  }, "image/png");
+}
+
+$("sDl").addEventListener("click", async e => {
+  if (!window.claude) return;
+  e.preventDefault();
+  if (!downloads || !sBlob) { $("sHint").textContent = "Saving isn't available in this view. Right-click the preview and choose Save image as."; return; }
+  try {
+    await downloads.save({ filename: $("sDl").download, data: sBlob });
+    $("sHint").textContent = "Saved.";
+  } catch (err) {
+    $("sHint").textContent = err?.code === "declined" ? "Download cancelled." : err?.code === "rate_limited" ? "A save prompt is already open. Try again in a moment." : "Saving isn't available here. Right-click the preview and choose Save image as.";
+  }
+});
+
+["mt", "mr", "mb", "ml"].forEach(id => $(id).addEventListener("input", () => {
+  if ($("mlink").checked) ["mt", "mr", "mb", "ml"].forEach(o => { if (o !== id) $(o).value = $(id).value; });
+  queueSlice();
+}));
+$("mlink").addEventListener("change", () => {
+  if ($("mlink").checked) ["mr", "mb", "ml"].forEach(o => $(o).value = $("mt").value);
+  queueSlice();
+});
+$("style").addEventListener("change", () => {
+  const blocks = $("style").value === "blocks";
+  $("swatches").hidden = !blocks;
+  document.querySelector(".toggles").hidden = !blocks;
+  queueSlice();
+});
+["cCorner", "cEdgeH", "cEdgeV", "cCenter", "cLine"].forEach(id => $(id).addEventListener("input", queueSlice));
+["munit", "msnap"].forEach(id => $(id).addEventListener("change", queueSlice));
+["tLines", "tLabels"].forEach(id => $(id).addEventListener("change", queueSlice));
+
+function rescale() {
+  const w = +$("w").value, h = +$("h").value;
+  if (!(w > 0 && h > 0)) return;
+  if (lastScale === "sw" && $("sw").value) $("sh").value = Math.round(+$("sw").value * h / w);
+  if (lastScale === "sh" && $("sh").value) $("sw").value = Math.round(+$("sh").value * w / h);
+}
+
+$("w").addEventListener("input", update);
+$("h").addEventListener("input", update);
+$("sw").addEventListener("input", () => { lastScale = "sw"; rescale(); });
+$("sh").addEventListener("input", () => { lastScale = "sh"; rescale(); });
+$("swap").addEventListener("click", () => {
+  [$("w").value, $("h").value] = [$("h").value, $("w").value];
+  update();
+});
+$("sw").value = 1280;
+restore();
+$("style").dispatchEvent(new Event("change"));
+update();
+</script>
+
+<script>if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js");</script>
+</html>
