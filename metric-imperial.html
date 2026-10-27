@@ -241,6 +241,44 @@ table.sizes tbody tr:hover td { background: var(--bg); }
     </section>
   </div>
 
+  <div id="currencyView" hidden>
+    <section class="card">
+      <div class="conv">
+        <div class="side">
+          <label class="label" for="fxAmt">Amount</label>
+          <input class="num" id="fxAmt" type="number" step="any" min="0" inputmode="decimal" value="100">
+          <select id="fxFrom" aria-label="From currency"></select>
+        </div>
+        <button class="swap" id="fxSwap" type="button" title="Swap currencies" aria-label="Swap currencies">⇄</button>
+        <div class="side">
+          <span class="label">Converted</span>
+          <output class="num" id="fxOut" for="fxAmt fxFrom fxTo"></output>
+          <select id="fxTo" aria-label="To currency"></select>
+        </div>
+      </div>
+      <p class="formula" id="fxRate"></p>
+      <p class="feel" id="fxFee"></p>
+      <p class="note" id="fxStatus"></p>
+    </section>
+
+    <section style="margin-top:28px">
+      <h2>Quick reference</h2>
+      <div class="all">
+        <div><h3 id="fxHeadA"></h3><ul id="fxTableA"></ul></div>
+        <div><h3 id="fxHeadB"></h3><ul id="fxTableB"></ul></div>
+      </div>
+    </section>
+
+    <section style="margin-top:28px">
+      <h2>Good to know</h2>
+      <ul class="tips">
+        <li>These are the European Central Bank's reference rates, published once each working day around 16:00 CET. They are mid-market rates with no fees.</li>
+        <li>Banks, cards and exchange booths add a margin, typically 1–3% for cards and 5–10% at airport kiosks.</li>
+        <li>When a card terminal abroad offers to charge you in your home currency, decline. That conversion usually has a worse rate.</li>
+      </ul>
+    </section>
+  </div>
+
   <div id="sizesView" hidden>
     <p class="note" style="margin:0 0 20px">Sizes vary between brands, so treat these as a starting point and check the brand's own chart when you can. Tap a row to highlight it.</p>
     <section>
@@ -409,9 +447,14 @@ const CATS = {
       "UK mpg is about 20% higher than US mpg for the same car, because the UK gallon is bigger.",
       "A typical family car uses 5–8 L/100 km (30–47 US mpg, 35–56 UK mpg)."],
   },
+  currency: { label: "Currency" },
   recipes: { label: "Recipes" },
   sizes: { label: "Clothing & shoes" },
 };
+
+// ECB reference rates via Frankfurter (api.frankfurter.dev). build.sh refreshes this line.
+const RATES_SNAPSHOT = {"amount":1.0,"base":"EUR","date":"2026-10-26","rates":{"AUD":1.5927,"BRL":6.2523,"CAD":1.5695,"CHF":0.9243,"CNY":7.4603,"CZK":24.369,"DKK":7.4747,"GBP":0.8382,"HKD":8.7768,"HUF":367.45,"IDR":20320.32,"ILS":3.4458,"INR":106.4935,"ISK":136.4,"JPY":176.15,"KRW":1482.72,"MXN":20.8271,"MYR":4.5731,"NOK":10.4545,"NZD":1.9695,"PHP":71.54,"PLN":4.4038,"RON":5.3473,"SEK":11.1385,"SGD":1.4327,"THB":37.821,"TRY":55.6746,"USD":1.1188,"ZAR":18.6046}};
+const CURRENCY_NAMES = {"AUD":"Australian dollar","BRL":"Brazilian real","CAD":"Canadian dollar","CHF":"Swiss franc","CNY":"Chinese yuan","CZK":"Czech koruna","DKK":"Danish krone","EUR":"Euro","GBP":"British pound","HKD":"Hong Kong dollar","HUF":"Hungarian forint","IDR":"Indonesian rupiah","ILS":"Israeli shekel","INR":"Indian rupee","ISK":"Icelandic króna","JPY":"Japanese yen","KRW":"South Korean won","MXN":"Mexican peso","MYR":"Malaysian ringgit","NOK":"Norwegian krone","NZD":"New Zealand dollar","PHP":"Philippine peso","PLN":"Polish złoty","RON":"Romanian leu","SEK":"Swedish krona","SGD":"Singapore dollar","THB":"Thai baht","TRY":"Turkish lira","USD":"US dollar","ZAR":"South African rand"};
 
 const OVEN = [[1, 140, 120, 275, "Very low"], [2, 150, 130, 300, "Low"], [3, 170, 150, 325, "Moderately low"],
   [4, 180, 160, 350, "Moderate"], [5, 190, 170, 375, "Moderately hot"], [6, 200, 180, 400, "Hot"],
@@ -476,9 +519,11 @@ function show(k) {
   cat = k;
   document.querySelectorAll("#tabs a").forEach(a => a.dataset.k === k ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
   try { localStorage.setItem("mi-tab", k); } catch {}
-  $("unitView").hidden = k === "recipes" || k === "sizes";
+  $("unitView").hidden = k === "recipes" || k === "sizes" || k === "currency";
   $("recipeView").hidden = k !== "recipes";
   $("sizesView").hidden = k !== "sizes";
+  $("currencyView").hidden = k !== "currency";
+  if (k === "currency") { fxUpdate(); fxRefresh(); return; }
   if (k === "recipes") { recipeUpdate(); scaleUpdate(); return; }
   if (k === "sizes") return;
   const c = CATS[k], s = state[k];
@@ -605,6 +650,85 @@ function recipeUpdate() {
   $("rNote").textContent = `Based on ${gPerCup} g of ${ing.toLowerCase()} per US cup. Cup, tablespoon and teaspoon amounts are rounded to the nearest common measure.`;
 }
 ["rAmt", "rUnit", "rIng"].forEach(id => $(id).addEventListener(id === "rAmt" ? "input" : "change", recipeUpdate));
+
+// currency
+let fx = RATES_SNAPSHOT, fxSource = "snapshot", fxLoading = false;
+try {
+  const c = JSON.parse(localStorage.getItem("mi-fx") || "null");
+  if (c && c.rates && c.date >= fx.date) { fx = c; fxSource = "cached"; }
+} catch {}
+const fxRate = code => code === "EUR" ? 1 : fx.rates[code];
+const fxCodes = () => ["EUR", ...Object.keys(fx.rates)].filter(c => CURRENCY_NAMES[c]).sort();
+const money = (n, code) => {
+  const big = Math.abs(n) >= 100 || ["JPY", "KRW", "IDR", "HUF", "ISK"].includes(code);
+  try { return n.toLocaleString(undefined, { style: "currency", currency: code, currencyDisplay: "narrowSymbol", maximumFractionDigits: big ? 0 : 2, minimumFractionDigits: big ? 0 : 2 }); }
+  catch { return `${fmt(n)} ${code}`; }
+};
+const fxDate = d => new Date(d + "T12:00:00").toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+
+function fxFill() {
+  const opts = fxCodes().map(c => `<option value="${c}">${c} · ${CURRENCY_NAMES[c]}</option>`).join("");
+  const a = $("fxFrom").value, b = $("fxTo").value;
+  $("fxFrom").innerHTML = $("fxTo").innerHTML = opts;
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem("mi-fx-pair") || "{}"); } catch {}
+  $("fxFrom").value = a || saved.from || "USD";
+  $("fxTo").value = b || saved.to || "EUR";
+  if (saved.amt && !a) $("fxAmt").value = saved.amt;
+}
+
+function fxUpdate() {
+  const from = $("fxFrom").value, to = $("fxTo").value, amt = parseFloat($("fxAmt").value);
+  try { localStorage.setItem("mi-fx-pair", JSON.stringify({ from, to, amt: $("fxAmt").value })); } catch {}
+  const r = fxRate(to) / fxRate(from);
+  $("fxOut").textContent = isFinite(amt) ? money(amt * r, to) : "—";
+  $("fxRate").textContent = `1 ${from} = ${fmt(r)} ${to}  ·  1 ${to} = ${fmt(1 / r)} ${from}`;
+  $("fxFee").innerHTML = isFinite(amt) && amt > 0
+    ? `With a typical 2% card fee you'd pay about <b>${money(amt * r * 1.02, to)}</b>, or get about <b>${money(amt * r * 0.98, to)}</b> when exchanging.`
+    : "";
+  // amounts sized to each currency: 1, 5, 10… for EUR/USD; 100, 500, 1000… for JPY
+  const steps = [1, 5, 10, 20, 50, 100, 200, 500, 1000];
+  const scale = code => Math.pow(10, Math.max(0, Math.round(Math.log10(fxRate(code)))));
+  $("fxHeadA").textContent = `${from} → ${to}`;
+  $("fxHeadB").textContent = `${to} → ${from}`;
+  $("fxTableA").innerHTML = steps.map(s => s * scale(from))
+    .map(v => `<li><span>${money(v, from)}</span><span>${money(v * r, to)}</span></li>`).join("");
+  $("fxTableB").innerHTML = steps.map(s => s * scale(to))
+    .map(v => `<li><span>${money(v, to)}</span><span>${money(v / r, from)}</span></li>`).join("");
+  const live = fxSource === "live";
+  $("fxStatus").textContent = live
+    ? `Rates from ${fxDate(fx.date)}, just updated from the European Central Bank.`
+    : fxLoading ? `Showing rates from ${fxDate(fx.date)} while checking for newer ones…`
+    : `Showing saved rates from ${fxDate(fx.date)}. Newer rates load automatically when this page can reach the internet (not possible inside claude.ai).`;
+}
+
+async function fxRefresh() {
+  if (fxSource === "live" || fxLoading) return;
+  fxLoading = true; fxUpdate();
+  try {
+    const res = await fetch("https://api.frankfurter.dev/v1/latest?base=EUR", { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    const data = await res.json();
+    if (data && data.rates && data.date) {
+      fx = data; fxSource = "live";
+      try { localStorage.setItem("mi-fx", JSON.stringify(data)); } catch {}
+      fxFill();
+    }
+  } catch {}
+  fxLoading = false;
+  fxUpdate();
+}
+
+fxFill();
+$("fxAmt").addEventListener("input", fxUpdate);
+$("fxFrom").addEventListener("change", fxUpdate);
+$("fxTo").addEventListener("change", fxUpdate);
+$("fxSwap").addEventListener("click", () => {
+  const out = parseFloat($("fxAmt").value) * fxRate($("fxTo").value) / fxRate($("fxFrom").value);
+  [$("fxFrom").value, $("fxTo").value] = [$("fxTo").value, $("fxFrom").value];
+  if (isFinite(out)) $("fxAmt").value = +out.toFixed(2);
+  fxUpdate();
+});
 
 // whole-recipe scaler
 const FRAC_CHARS = { "½": 1/2, "⅓": 1/3, "⅔": 2/3, "¼": 1/4, "¾": 3/4, "⅛": 1/8, "⅜": 3/8, "⅝": 5/8, "⅞": 7/8 };

@@ -1,5 +1,5 @@
 // Offline support: the app's own files are cached on install, fonts as they load.
-const CACHE = "tools-20261027004734";
+const CACHE = "tools-20261027010044";
 const FILES = ["./", "index.html", "aspect-ratio.html", "metric-imperial.html", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", e => {
@@ -15,6 +15,8 @@ self.addEventListener("activate", e => {
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
+  // exchange rates must always come fresh from the network; the page keeps its own offline copy
+  if (url.hostname === "api.frankfurter.dev") return;
   // pages: try the network first so updates show up, fall back to the cache offline
   if (url.origin === location.origin && e.request.mode === "navigate") {
     e.respondWith(fetch(e.request)
